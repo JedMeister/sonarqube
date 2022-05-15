@@ -1,0 +1,13 @@
+#!/bin/bash -ex
+
+PROXY="--proxy $FAB_HTTPS_PROXY"
+
+URL=https://www.sonarqube.org/success-download-community-edition/
+temp=/tmp/html
+
+URL=$(curl -L -f $PROXY $URL \
+    | grep -i -B1 'click here' \
+    | sed -En "s|.*href=\"([a-zA-z0-9:/\.]*).*|\1|p")
+cd /usr/local/src
+curl -L -f -O $PROXY $URL
+cd -

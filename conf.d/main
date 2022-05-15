@@ -1,0 +1,39 @@
+#!/bin/sh -ex
+
+DB_NAME=sonarqube
+DB_USER=sonarqube
+DB_PASS=$(mcookie)
+
+ADMIN_NAME=admin
+ADMIN_PASS=turnkey
+ADMIN_MAIL=admin@example.com
+
+APP_USER=sonarqube
+INST_DIR=/opt/$APP_USER
+ZIP=/usr/local/src/$APP_USER-*.zip
+
+adduser $APP_USER --system
+unzip $ZIP -d $(dirname $INST_DIR)
+mv $INST_DIR-* $INST_DIR
+chown -R $USER $INST_DIR
+
+JAR=$(ls $INST_DIR/lib/sonar-application-*.jar)
+sed -i "s|__JAR__|$JAR|" /etc/systemd/system/sonarqube.service
+
+# create database
+su postgres -c "createuser --no-superuser --createdb --no-createrole $DB_USER"
+su postgres -c "createdb --owner $DB_USER -EUTF8 -Ttemplate0 $DB_NAME"
+su postgres -c "psql postgres" << EOF
+alter user $DB_USER with encrypted password '$DB_PASS';
+EOF
+echo "DB creds: $DB_USER $DB_PASS"
+
+conf_set() {
+    sed -Ei "/^#?$1=/ s|#?.*|$1=$2|" /opt/sonarqube/conf/sonar.properties
+}
+conf_set sonar.jdbc.username $DB_USER
+conf_set sonar.jdbc.password $DB_PASS
+conf_set sonar.jdbc.url jdbc:postgresql://localhost/$DB_NAME
+conf_set sonar.search.javaOpts "-Xmx512m -Xms512m --XX:MaxDirectMemorySize=512m XX:+HeapDumpOnOutOfMemoryError"
+conf_set sonar.web.host 127.0.0.1
+#sonar.web.port=9000
